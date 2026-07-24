@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<h2>Welcome, {{ user.split('@')[0] }}</h2>
+<div class="card">
+    <h3>Resume Analyser</h3>
+
+
+    <form method="post" enctype="multipart/form-data">
+        <textarea name="resume" placeholder="Paste Your Resume"></textarea>
+        <p>Or Upload file:</p>
+        <input type="file" name="file" >
+        <input  name="role" placeholder="What do you want to become? (eg. Software Engineer) " required >
+        <button type="submit">Analyse</button>
+    </form>
+</div>
+
+{% if result %}
+<div class="card">
+    {% if result.error %}
+    <p style="color: red; margin-bottom: 20px; font-weight: 500;"> Error: {{result.error}}</p>
+    {% endif %}
+
+    <!-- Skills Match Score Ring -->
+    {% set total_skills = result.get("skills", [])|length + result.get("missing_skills", [])|length %}
+    {% set match_pct = ((result.get("skills", [])|length / (total_skills if total_skills > 0 else 1)) * 100)|round|int %}
+    <div style="text-align: center; margin-bottom: 30px;">
+        <div style="display: inline-block; background: #eff6ff; border: 3px solid #2563eb; border-radius: 50%; width: 110px; height: 110px; line-height: 104px; text-align: center; font-size: 26px; font-weight: bold; color: #1e3a8a; box-shadow: 0 4px 10px rgba(37, 99, 235, 0.15);">
+            {{ match_pct }}%
+        </div>
+        <p style="margin-top: 10px; font-weight: 600; color: #4b5563; font-size: 15px;">Overall Skills Match Score</p>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+        <div>
+            <h3>Current Skills</h3>
+            <ul style="padding-left: 0;">
+                {% for s in result.get("skills", []) %}
+                <li style="padding: 8px 12px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; margin-bottom: 8px; color: #166534; font-size: 14px; list-style: none;">✓ {{ s }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+        <div>
+            <h3>Missing Skills</h3>
+            <ul style="padding-left: 0;">
+                {% for s in result.get("missing_skills", []) %}
+                <li style="padding: 8px 12px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; margin-bottom: 8px; color: #991b1b; font-size: 14px; list-style: none;">✗ {{ s }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+    
+    <h3 style="margin-top: 30px;">Interactive Learning Roadmap</h3>
+    <p style="color: #6b7280; font-size: 13px; margin-bottom: 12px;">Check off the milestones as you complete them to track your learning progress!</p>
+    <ul style="padding-left: 0;">
+        {% for s in result.get("roadmap", []) %}
+        <li style="display: flex; align-items: flex-start; cursor: pointer; padding: 10px 14px; border: 1px solid #e5e7eb; background: #fafafa; border-radius: 8px; margin-bottom: 8px; transition: 0.2s; list-style: none;" onclick="var chk = this.querySelector('input'); chk.checked = !chk.checked; if(chk.checked) { this.style.textDecoration = 'line-through'; this.style.opacity = '0.6'; this.style.background = '#f3f4f6'; } else { this.style.textDecoration = ''; this.style.opacity = '1'; this.style.background = '#fafafa'; }">
+            <input type="checkbox" style="margin-right: 12px; margin-top: 4px; cursor: pointer;" onclick="event.stopPropagation(); var li = this.closest('li'); if(this.checked) { li.style.textDecoration = 'line-through'; li.style.opacity = '0.6'; li.style.background = '#f3f4f6'; } else { li.style.textDecoration = ''; li.style.opacity = '1'; li.style.background = '#fafafa'; }">
+            <span style="font-size: 14px; font-weight: 500;">
+                {% if s is mapping %}
+                    <strong>{{ s.get('step', s.get('title', s.get('milestone', s.get('phase', s.values()|first)))) }}</strong>
+                    {% if s.get('description') %} - {{ s.get('description') }}{% endif %}
+                    {% if s.get('duration') %} ({{ s.get('duration') }}){% endif %}
+                {% else %}
+                    {{ s }}
+                {% endif %}
+            </span>
+        </li>
+        {% endfor %}
+    </ul>
+    
+    <h3 style="margin-top: 30px;">Practice Interview Preparation</h3>
+    <p style="color: #6b7280; font-size: 13px; margin-bottom: 15px;">Click 'Practice Answer' to submit your response to the AI for grading and feedback!</p>
+    <ul style="padding-left: 0;">
+        {% for s in result.get("interview_questions", []) %}
+        <li style="margin-bottom: 15px; padding: 18px; border: 1px solid #e5e7eb; border-radius: 10px; background: #ffffff; list-style: none; box-shadow: 0 2px 5px rgba(0,0,0,0.02);">
+            <p style="font-weight: 600; margin-bottom: 10px; color: #1f2937;">Q: {{ s }}</p>
+            <button type="button" class="btn btn-secondary" onclick="toggleInterview('{{ loop.index }}')" style="margin-top: 0; padding: 6px 12px; font-size: 13px;">Practice Answer</button>
+            <div id="practice-{{ loop.index }}" style="display: none; margin-top: 12px;">
+                <textarea id="answer-{{ loop.index }}" placeholder="Type your answer here..." style="min-height: 80px; margin-top: 0;"></textarea>
+                <button type="button" onclick="submitAnswer('{{ loop.index }}', '{{ s|escape }}')" style="margin-top: 8px; padding: 8px 14px; font-size: 13px;">Submit Response</button>
+                <div id="feedback-{{ loop.index }}" style="margin-top: 12px; padding: 14px; border-radius: 8px; display: none; font-size: 14px; line-height: 1.5;"></div>
+            </div>
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+
+<script>
+function toggleInterview(index) {
+    var el = document.getElementById('practice-' + index);
+    el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+function submitAnswer(index, questionText) {
+    var answer = document.getElementById('answer-' + index).value;
+    var feedbackDiv = document.getElementById('feedback-' + index);
+    if (!answer.trim()) {
+        alert("Please type an answer first.");
+        return;
+    }
+    feedbackDiv.style.display = 'block';
+    feedbackDiv.style.background = '#f3f4f6';
+    feedbackDiv.style.border = '1px solid #e5e7eb';
+    feedbackDiv.innerHTML = '<span style="color: #6b7280;">Evaluating answer...</span>';
+    
+    fetch('/api/interview-feedback', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ question: questionText, answer: answer })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.error) {
+            feedbackDiv.style.background = '#fee2e2';
+            feedbackDiv.style.border = '1px solid #fecaca';
+            feedbackDiv.innerHTML = '<span style="color: #b91c1c;">Error: ' + data.error + '</span>';
+        } else {
+            feedbackDiv.style.background = '#f0fdf4';
+            feedbackDiv.style.border = '1px solid #bbf7d0';
+            feedbackDiv.style.color = '#1f2937';
+            feedbackDiv.innerHTML = `
+                <div style="font-weight: bold; color: #15803d; font-size: 16px; margin-bottom: 6px;">Score: ${data.score}/100</div>
+                <div style="margin-bottom: 8px;"><strong>Strengths:</strong> ${data.strengths}</div>
+                <div style="margin-bottom: 8px;"><strong>Improvements:</strong> ${data.improvements}</div>
+                <div style="margin-top: 10px; padding-top: 8px; border-top: 1px dashed #bbf7d0;"><strong>Model Answer:</strong> <span style="font-style: italic; color: #4b5563;">${data.exemplar}</span></div>
+            `;
+        }
+    })
+    .catch(err => {
+        feedbackDiv.style.background = '#fee2e2';
+        feedbackDiv.style.border = '1px solid #fecaca';
+        feedbackDiv.innerHTML = '<span style="color: #b91c1c;">Error evaluating answer.</span>';
+    });
+}
+</script>
+{% endif %}
+
+{% endblock %}

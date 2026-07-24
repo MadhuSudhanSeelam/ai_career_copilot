@@ -1,0 +1,6 @@
+.env
+__pycache__/
+.vscode/
+*.pyc
+ai_career_copilot.db
+venv/
